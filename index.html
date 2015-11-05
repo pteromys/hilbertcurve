@@ -16,6 +16,13 @@
 			top: 0px; left: 0px; bottom: 0px; right: 0px;
 			box-shadow: 0em 0em 2em 0em rgba(0, 0, 0, 0.5);
 		}
+		form ul {
+			list-style-type: none; text-align: left; padding-left: 0em;
+			margin-bottom: 0em;
+		}
+		#config .box {
+			min-width: 10em;
+		}
 	</style>
 	<script type="text/javascript" src="https://ajax.googleapis.com/ajax/libs/jquery/1.11.0/jquery.min.js"></script>
 	<script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
@@ -151,11 +158,16 @@
 				var y = $(document).scrollTop() + e.center.y - o.top;
 				x = Math.min(Math.max(-1, 2 * x * scale - 1), 1);
 				y = Math.min(Math.max(-1, 1 - 2 * y * scale), 1);
-				var t = hilbert(x, y,
-					Math.ceil(-Math.log(scale)/Math.log(2)));
+				var t;
+				if ($('#config_mode').prop('checked') ^ (e.pointers.length > 1) ^ e.srcEvent.ctrlKey) {
+					t = Math.min(Math.max(0, 0.5 * (1 + x - y)), 1);
+				} else {
+					t = hilbert(x, y,
+						Math.ceil(-Math.log(scale)/Math.log(2)));
+				}
 				glc.target_threshold = t;
 				glc.coeff_local = 1/(Math.pow(t, LOCALITY) + Math.pow(1-t, LOCALITY));
-				glc.coeff_linear = 0.5;
+				glc.coeff_linear = 0.8;
 				glc.coeff_constant = Math.sqrt(t);
 				frame_manager.requestFrame();
 			});
@@ -185,14 +197,28 @@
 		This demo requires HTML5 Canvas support.
 	</canvas>
 	<div id="messages" class="messagebox"></div>
+	<div id="config" class="overlay"><div class="box">
+		<a class="button icon button_close" title="Close" href="#">&times;</a>
+		<h2>Options</h2>
+		<form method="post" action="#" id="form_config">
+			<ul>
+				<li><input type="checkbox" id="config_mode" />
+					<label for="config_mode">Toggle dragging mode</label></li>
+			</ul>
+		</form>
+	</div></div>
 	<div id="help" class="overlay"><div class="box">
 		<a class="button icon button_close" title="Close" href="#">&times;</a>
 		<h2>Help</h2>
 		<p>You are looking at a <a
 			href="https://en.wikipedia.org/wiki/Hilbert_curve">Hilbert
 			Curve</a>, a continuous path that hits every point of a square.</p>
-		<p>Drag around the square to see its progress.</p>
+		<p>Drag around the square to see its progress.
+			Use two fingers or <span class="keyboard-key">Ctrl</span>
+			for an alternative mode.</p>
 	</div></div>
+	<a class="button icon button_root"
+		href="#config" id="button_config" title="Settings">&#x2699;</a>
 	<a class="button icon button_root" data-key="QUESTION"
 		href="#help" id="button_help" title="Help">?</a>
 </body>
