@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="en">
+<head>
+	<title>Hilbert Curve</title>
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<link rel="stylesheet" type="text/css" href="/icons/webfont.css" />
+	<link rel="stylesheet" type="text/css" href="umbra.css" />
+	<style type="text/css">
+		html, body {
+			width: 100%; height: 100%; margin: 0px; padding: 0px;
+			overflow: hidden;
+		}
+		body { background: #336; }
+		canvas {
+			position: absolute; margin: auto;
+			top: 0px; left: 0px; bottom: 0px; right: 0px;
+		}
+	</style>
+	<script type="text/javascript" src="https://ajax.googleapis.com/ajax/libs/jquery/1.11.0/jquery.min.js"></script>
+	<script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+	<script type="text/javascript" src="hammer.min.js"></script>
+	<script type="text/javascript" src="umbra.min.js"></script>
+	<script type="text/javascript" src="anima.min.js"></script>
+	<script type="text/javascript">
+		$(document).ready(function () {
+			var CANVAS = '#main';
+			var glc = new Anima.GL();
+			var frame_manager;
+			glc.setupCallback = function () {
+				var gl = this.gl;
+				gl.clearColor(0, 0, 0, 0);
+				this.vertex_buffer = gl.createBuffer();
+				gl.bindBuffer(gl.ARRAY_BUFFER, this.vertex_buffer);
+				gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
+					-1, -1, 0, 1,
+					1, -1, 0, 1,
+					-1, 1, 0, 1,
+					1, 1, 0, 1,
+				]), gl.STATIC_DRAW);
+				this.handleResize();
+			};
+			glc.draw = function () {
+				var gl = glc.gl;
+				if (!gl) { return false; }
+				var prog = glc.shaders.main;
+				gl.useProgram(prog);
+				gl.disable(gl.DEPTH_TEST);
+				gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+				gl.clear(gl.COLOR_BUFFER_BIT);
+				var pos = gl.getAttribLocation(prog, 'pos');
+				gl.enableVertexAttribArray(pos);
+				gl.vertexAttribPointer(pos, 4, gl.FLOAT, false, 0, 0);
+				gl.uniform1i(gl.getUniformLocation(prog, 'uResolution'), glc.uResolution);
+				gl.uniform1f(gl.getUniformLocation(prog, 'uScale'), glc.uScale);
+				gl.uniform1f(gl.getUniformLocation(prog, 'uThreshold'), glc.uThreshold);
+				gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+			};
+			glc.handleResize = function () {
+				var d = Math.min($(window).innerWidth(), $(window).innerHeight());
+				glc.uResolution = Math.ceil(Math.log(d)/Math.log(2));
+				glc.uThreshold = 1;
+				glc.resize(d, d);
+			};
+			glc.resizeCallback = function (w, h) {
+				frame_manager.requestFrame();
+			};
+			glc.addProgram('main',
+				'attribute vec4 pos; varying mediump vec2 vCoord;' +
+				'void main(void) {' +
+					'gl_Position = pos;' +
+					'vCoord = pos.xy;' +
+				'}',
+				'uniform int uResolution; uniform mediump float uThreshold;' +
+				'varying mediump vec2 vCoord;' +
+				'const int DEPTH = 12;' +
+				'mediump float hilbert(mediump vec2 pos) {' +
+					'mediump float ix, iy;' +
+					'mediump float ans = 0.0, scale = 1.0;' +
+					'for (int i = 0; i < DEPTH; i++) {' +
+						// the 0.9 moves [0,1] into [0,1).
+						'ix = 1.0 + floor(0.9 * pos.x); iy = 1.0 + floor(0.9 * pos.y);' +
+						'scale *= 0.25;' +
+						'ans += scale * (iy + 3.0 * ix - 2.0 * ix * iy);' +
+						'pos = vec2(' +
+							'2.0 * (iy * pos.x + (1.0 - iy) * (1.0 - 2.0 * ix) * pos.y) + 1.0 - 2.0 * ix,' +
+							'2.0 * (iy * pos.y + (1.0 - iy) * (1.0 - 2.0 * ix) * pos.x) + 1.0 - 2.0 * iy' +
+						');' +
+					'}' +
+					'return ans + 0.5 * scale;' +
+				'}' +
+				'void main(void) {' +
+					'mediump float progress = hilbert(vCoord);' +
+					'mediump float alpha = ceil(0.5 * sign(uThreshold - progress));' +
+					'gl_FragColor = vec4(vec3(progress * alpha), alpha);' +
+				'}');
+			frame_manager = new Anima.FrameManager(glc.draw);
+			message_box = Umbra.MessageBox('messages');
+			try {
+				glc.bindCanvas($(CANVAS)[0]);
+			} catch (e) {
+				window.message_box.post('GL: ' + e, 'error');
+				glc.gl = null;
+			}
+			frame_manager.requestFrame();
+			$(window).on('resize', glc.handleResize);
+			// Motion
+			var h = new Hammer.Manager($(CANVAS)[0]);
+			h.add(new Hammer.Pan({direction: Hammer.DIRECTION_ALL, threshold: 0, pointers: 0}));
+			h.on('pan', function (e) {
+				e.preventDefault();
+				var o = $(CANVAS).offset();
+				var scale = 1 / $(CANVAS)[0].width;
+				var x = $(document).scrollLeft() + e.center.x - o.left;
+				glc.uThreshold = x * scale;
+				frame_manager.requestFrame();
+			});
+			// On canvas, suppress selection of hidden text boxes
+			$(CANVAS).on('mousedown selectstart', function (e) {
+				e.preventDefault();
+			});
+		});
+	</script>
+</head>
+<body>
+	<canvas id="main">
+		<img src="thumb.png" alt="Preview" />
+		This demo requires HTML5 Canvas support.
+	</canvas>
+	<div id="messages" class="messagebox"></div>
+	<div id="help" class="overlay"><div class="box">
+		<a class="button icon button_close" title="Close" href="#">&times;</a>
+		<h2>Help</h2>
+		<p>You are looking at a <a
+			href="https://en.wikipedia.org/wiki/Hilbert_curve">Hilbert
+			Curve</a>, a continuous path that hits every point of a square.</p>
+		<p>Drag left and right across the square to see its progress.</p>
+	</div></div>
+	<a class="button icon button_root" data-key="QUESTION"
+		href="#help" id="button_help" title="Help">?</a>
+</body>
+</html>
