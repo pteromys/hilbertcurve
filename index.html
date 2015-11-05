@@ -10,10 +10,11 @@
 			width: 100%; height: 100%; margin: 0px; padding: 0px;
 			overflow: hidden;
 		}
-		body { background: #336; }
+		body { background: #eb3; }
 		canvas {
 			position: absolute; margin: auto;
 			top: 0px; left: 0px; bottom: 0px; right: 0px;
+			box-shadow: 0em 0em 2em 0em rgba(0, 0, 0, 0.5);
 		}
 	</style>
 	<script type="text/javascript" src="https://ajax.googleapis.com/ajax/libs/jquery/1.11.0/jquery.min.js"></script>
@@ -24,6 +25,8 @@
 	<script type="text/javascript">
 		$(document).ready(function () {
 			var CANVAS = '#main';
+			var LOCALITY = 0.9;
+			var mouse_is_down = false;
 			var glc = new Anima.GL();
 			var frame_manager;
 			glc.setupCallback = function () {
@@ -52,13 +55,34 @@
 				gl.vertexAttribPointer(pos, 4, gl.FLOAT, false, 0, 0);
 				gl.uniform1i(gl.getUniformLocation(prog, 'uResolution'), glc.uResolution);
 				gl.uniform1f(gl.getUniformLocation(prog, 'uScale'), glc.uScale);
+				var draw_again = false;
+				var t = 0.2 * (glc.target_threshold - glc.uThreshold);
+				if (Math.abs(t) < 0.00000001) {
+					glc.uThreshold = glc.target_threshold
+				} else {
+					glc.uThreshold += t;
+					draw_again = true;
+				}
 				gl.uniform1f(gl.getUniformLocation(prog, 'uThreshold'), glc.uThreshold);
+				if (!mouse_is_down) {
+					glc.coeff_linear += 0.01;
+					if (glc.coeff_linear > 1) { glc.coeff_linear = 1; }
+					else { draw_again = true; }
+				}
+				gl.uniform1f(gl.getUniformLocation(prog, 'uCoeffLinear'), glc.coeff_linear);
+				gl.uniform1f(gl.getUniformLocation(prog, 'uCoeffLocal'), glc.coeff_local * (1 - glc.coeff_linear));
+				gl.uniform1f(gl.getUniformLocation(prog, 'uCoeffConstant'), glc.coeff_constant * (1 - glc.coeff_linear));
 				gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+				return draw_again;
 			};
 			glc.handleResize = function () {
 				var d = Math.min($(window).innerWidth(), $(window).innerHeight());
 				glc.uResolution = Math.ceil(Math.log(d)/Math.log(2));
 				glc.uThreshold = 1;
+				glc.target_threshold = 1;
+				glc.coeff_linear = 1;
+				glc.coeff_local = 0;
+				glc.coeff_constant = 0;
 				glc.resize(d, d);
 			};
 			glc.resizeCallback = function (w, h) {
@@ -71,6 +95,7 @@
 					'vCoord = pos.xy;' +
 				'}',
 				'uniform int uResolution; uniform mediump float uThreshold;' +
+				'uniform mediump float uCoeffLinear, uCoeffLocal, uCoeffConstant;' +
 				'varying mediump vec2 vCoord;' +
 				'const int DEPTH = 12;' +
 				'mediump float hilbert(mediump vec2 pos) {' +
@@ -88,10 +113,12 @@
 					'}' +
 					'return ans + 0.5 * scale;' +
 				'}' +
+				'mediump float reparametrize(mediump float t) {' +
+					'return uCoeffConstant + t * uCoeffLinear + sign(t - uThreshold) * uCoeffLocal * pow(abs(t - uThreshold), 1.0 - ' + LOCALITY + ');' +
+				'}' +
 				'void main(void) {' +
 					'mediump float progress = hilbert(vCoord);' +
-					'mediump float alpha = ceil(0.5 * sign(uThreshold - progress));' +
-					'gl_FragColor = vec4(vec3(progress * alpha), alpha);' +
+					'gl_FragColor = vec4(vec3(reparametrize(progress)), 1.0);' +
 				'}');
 			frame_manager = new Anima.FrameManager(glc.draw);
 			message_box = Umbra.MessageBox('messages');
@@ -104,16 +131,47 @@
 			frame_manager.requestFrame();
 			$(window).on('resize', glc.handleResize);
 			// Motion
+			function hilbert(x, y, depth) {
+				var ix = 1 + Math.floor(0.9 * x);
+				var iy = 1 + Math.floor(0.9 * y);
+				if (depth <= 0) { return 0.5; }
+				return 0.25 * (iy + 3*ix - 2*ix*iy + hilbert(
+					2 * (iy * x + (1 - iy) * (1 - 2*ix) * y) + 1 - 2*ix,
+					2 * (iy * y + (1 - iy) * (1 - 2*ix) * x) + 1 - 2*iy,
+					depth - 1));
+			}
 			var h = new Hammer.Manager($(CANVAS)[0]);
 			h.add(new Hammer.Pan({direction: Hammer.DIRECTION_ALL, threshold: 0, pointers: 0}));
 			h.on('pan', function (e) {
 				e.preventDefault();
+				mouse_is_down = true;
 				var o = $(CANVAS).offset();
 				var scale = 1 / $(CANVAS)[0].width;
 				var x = $(document).scrollLeft() + e.center.x - o.left;
-				glc.uThreshold = x * scale;
+				var y = $(document).scrollTop() + e.center.y - o.top;
+				x = Math.min(Math.max(-1, 2 * x * scale - 1), 1);
+				y = Math.min(Math.max(-1, 1 - 2 * y * scale), 1);
+				var t = hilbert(x, y,
+					Math.ceil(-Math.log(scale)/Math.log(2)));
+				glc.target_threshold = t;
+				glc.coeff_local = 1/(Math.pow(t, LOCALITY) + Math.pow(1-t, LOCALITY));
+				glc.coeff_linear = 0.5;
+				glc.coeff_constant = Math.sqrt(t);
 				frame_manager.requestFrame();
 			});
+			h.on('hammer.input', function (e) {
+				if (e.isFinal) {
+					mouse_is_down = false;
+					frame_manager.requestFrame();
+				}
+			});
+			$(window).on('mouseup touchcancel touchend mouseleave touchleave',
+				function (e) {
+					if (!e.relatedTarget) {
+						mouse_is_down = false;
+						frame_manager.requestFrame();
+					}
+				});
 			// On canvas, suppress selection of hidden text boxes
 			$(CANVAS).on('mousedown selectstart', function (e) {
 				e.preventDefault();
@@ -133,7 +191,7 @@
 		<p>You are looking at a <a
 			href="https://en.wikipedia.org/wiki/Hilbert_curve">Hilbert
 			Curve</a>, a continuous path that hits every point of a square.</p>
-		<p>Drag left and right across the square to see its progress.</p>
+		<p>Drag around the square to see its progress.</p>
 	</div></div>
 	<a class="button icon button_root" data-key="QUESTION"
 		href="#help" id="button_help" title="Help">?</a>
