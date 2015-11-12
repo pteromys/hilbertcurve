@@ -1,9 +1,8 @@
 uniform int uResolution;
 uniform mediump float uThreshold;
-uniform mediump float uCoeffLinear, uCoeffLocal, uCoeffConstant;
+uniform mediump float uCoeffLinear;
 varying mediump vec2 vCoord;
 const int DEPTH = 12;
-uniform mediump float uLocality;
 
 mediump float hilbert(mediump vec2 pos) {
 	mediump float ix, iy;
@@ -23,7 +22,11 @@ mediump float hilbert(mediump vec2 pos) {
 
 mediump float reparametrize(mediump float t) {
 	mediump float offset = t - uThreshold;
-	return mix(uCoeffConstant + sign(offset) * uCoeffLocal * pow(abs(offset), 1.0 - uLocality), t, uCoeffLinear);
+	return mix(0.6 - 0.2 * uThreshold +
+		sign(offset) * 0.15 +
+		sign(offset + 0.005) * 0.125 + sign(offset - 0.005) * 0.125 +
+		(1.0 - sign(offset + 0.005) * sign(offset - 0.005)) * offset * 25.0,
+		t, uCoeffLinear);
 }
 
 void main(void) {

@@ -32,7 +32,6 @@
 	<script type="text/javascript">
 		$(document).ready(function () {
 			var CANVAS = '#main';
-			var LOCALITY = 0.9;
 			var mouse_is_down = false;
 			var glc = new Anima.GL();
 			var frame_manager;
@@ -62,7 +61,6 @@
 				gl.vertexAttribPointer(pos, 4, gl.FLOAT, false, 0, 0);
 				gl.uniform1i(gl.getUniformLocation(prog, 'uResolution'), glc.uResolution);
 				gl.uniform1f(gl.getUniformLocation(prog, 'uScale'), glc.uScale);
-				gl.uniform1f(gl.getUniformLocation(prog, 'uLocality'), LOCALITY);
 				var draw_again = false;
 				var t = 0.2 * (glc.target_threshold - glc.uThreshold);
 				if (Math.abs(t) < 0.00000001) {
@@ -73,13 +71,11 @@
 				}
 				gl.uniform1f(gl.getUniformLocation(prog, 'uThreshold'), glc.uThreshold);
 				if (!mouse_is_down) {
-					glc.coeff_linear += 0.01;
+					glc.coeff_linear += 0.02;
 					if (glc.coeff_linear > 1) { glc.coeff_linear = 1; }
 					else { draw_again = true; }
 				}
 				gl.uniform1f(gl.getUniformLocation(prog, 'uCoeffLinear'), glc.coeff_linear);
-				gl.uniform1f(gl.getUniformLocation(prog, 'uCoeffLocal'), glc.coeff_local);
-				gl.uniform1f(gl.getUniformLocation(prog, 'uCoeffConstant'), glc.coeff_constant);
 				gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
 				return draw_again;
 			};
@@ -138,9 +134,7 @@
 						Math.ceil(-Math.log(scale)/Math.log(2)));
 				}
 				glc.target_threshold = t;
-				glc.coeff_local = 1/(Math.pow(t, LOCALITY) + Math.pow(1-t, LOCALITY));
-				glc.coeff_linear = 0.8;
-				glc.coeff_constant = Math.sqrt(t);
+				glc.coeff_linear = 0.6;
 				frame_manager.requestFrame();
 			});
 			h.on('hammer.input', function (e) {
