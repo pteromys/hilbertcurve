@@ -78,8 +78,8 @@
 					else { draw_again = true; }
 				}
 				gl.uniform1f(gl.getUniformLocation(prog, 'uCoeffLinear'), glc.coeff_linear);
-				gl.uniform1f(gl.getUniformLocation(prog, 'uCoeffLocal'), glc.coeff_local * (1 - glc.coeff_linear));
-				gl.uniform1f(gl.getUniformLocation(prog, 'uCoeffConstant'), glc.coeff_constant * (1 - glc.coeff_linear));
+				gl.uniform1f(gl.getUniformLocation(prog, 'uCoeffLocal'), glc.coeff_local);
+				gl.uniform1f(gl.getUniformLocation(prog, 'uCoeffConstant'), glc.coeff_constant);
 				gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
 				return draw_again;
 			};

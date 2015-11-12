@@ -22,8 +22,8 @@ mediump float hilbert(mediump vec2 pos) {
 }
 
 mediump float reparametrize(mediump float t) {
-	return uCoeffConstant + t * uCoeffLinear +
-		sign(t - uThreshold) * uCoeffLocal * pow(abs(t - uThreshold), 1.0 - uLocality);
+	mediump float offset = t - uThreshold;
+	return mix(uCoeffConstant + sign(offset) * uCoeffLocal * pow(abs(offset), 1.0 - uLocality), t, uCoeffLinear);
 }
 
 void main(void) {
