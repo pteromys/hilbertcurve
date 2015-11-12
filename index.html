@@ -62,6 +62,7 @@
 				gl.vertexAttribPointer(pos, 4, gl.FLOAT, false, 0, 0);
 				gl.uniform1i(gl.getUniformLocation(prog, 'uResolution'), glc.uResolution);
 				gl.uniform1f(gl.getUniformLocation(prog, 'uScale'), glc.uScale);
+				gl.uniform1f(gl.getUniformLocation(prog, 'uLocality'), LOCALITY);
 				var draw_again = false;
 				var t = 0.2 * (glc.target_threshold - glc.uThreshold);
 				if (Math.abs(t) < 0.00000001) {
@@ -95,48 +96,19 @@
 			glc.resizeCallback = function (w, h) {
 				frame_manager.requestFrame();
 			};
-			glc.addProgram('main',
-				'attribute vec4 pos; varying mediump vec2 vCoord;' +
-				'void main(void) {' +
-					'gl_Position = pos;' +
-					'vCoord = pos.xy;' +
-				'}',
-				'uniform int uResolution; uniform mediump float uThreshold;' +
-				'uniform mediump float uCoeffLinear, uCoeffLocal, uCoeffConstant;' +
-				'varying mediump vec2 vCoord;' +
-				'const int DEPTH = 12;' +
-				'mediump float hilbert(mediump vec2 pos) {' +
-					'mediump float ix, iy;' +
-					'mediump float ans = 0.0, scale = 1.0;' +
-					'for (int i = 0; i < DEPTH; i++) {' +
-						// the 0.9 moves [0,1] into [0,1).
-						'ix = 1.0 + floor(0.9 * pos.x); iy = 1.0 + floor(0.9 * pos.y);' +
-						'scale *= 0.25;' +
-						'ans += scale * (iy + 3.0 * ix - 2.0 * ix * iy);' +
-						'pos = vec2(' +
-							'2.0 * (iy * pos.x + (1.0 - iy) * (1.0 - 2.0 * ix) * pos.y) + 1.0 - 2.0 * ix,' +
-							'2.0 * (iy * pos.y + (1.0 - iy) * (1.0 - 2.0 * ix) * pos.x) + 1.0 - 2.0 * iy' +
-						');' +
-					'}' +
-					'return ans + 0.5 * scale;' +
-				'}' +
-				'mediump float reparametrize(mediump float t) {' +
-					'return uCoeffConstant + t * uCoeffLinear + sign(t - uThreshold) * uCoeffLocal * pow(abs(t - uThreshold), 1.0 - ' + LOCALITY + ');' +
-				'}' +
-				'void main(void) {' +
-					'mediump float progress = hilbert(vCoord);' +
-					'gl_FragColor = vec4(vec3(reparametrize(progress)), 1.0);' +
-				'}');
+			glc.addProgramByURLs('main', 'vert.c', 'frag.c', setupContinue);
 			frame_manager = new Anima.FrameManager(glc.draw);
 			message_box = Umbra.MessageBox('messages');
-			try {
-				glc.bindCanvas($(CANVAS)[0]);
-			} catch (e) {
-				window.message_box.post('GL: ' + e, 'error');
-				glc.gl = null;
+			function setupContinue() {
+				try {
+					glc.bindCanvas($(CANVAS)[0]);
+				} catch (e) {
+					window.message_box.post('GL: ' + e, 'error');
+					glc.gl = null;
+				}
+				frame_manager.requestFrame();
+				$(window).on('resize', glc.handleResize);
 			}
-			frame_manager.requestFrame();
-			$(window).on('resize', glc.handleResize);
 			// Motion
 			function hilbert(x, y, depth) {
 				var ix = 1 + Math.floor(0.9 * x);
